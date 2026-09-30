@@ -102,8 +102,8 @@ OPTIONS = {
         "CFBundleName": "PDF 工具箱",
         "CFBundleDisplayName": "PDF 工具箱",
         "CFBundleIdentifier": "com.local.pdftoolkit",
-        "CFBundleVersion": "1.0.0",
-        "CFBundleShortVersionString": "1.0.0",
+        "CFBundleVersion": "3.0.0",
+        "CFBundleShortVersionString": "3.0.0",
         # 开发区域设为中文：本地化全都匹配不上时，macOS 回退到中文而不是英文，
         # 与本应用实际的中文界面一致，不会出现「界面中文、系统面板英文」的割裂。
         # 注意值用 zh_CN 而非 zh-Hans：旧系统（10.15 之前）只认带地区的写法。

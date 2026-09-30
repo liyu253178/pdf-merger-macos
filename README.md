@@ -12,7 +12,7 @@ macOS 原生桌面应用，Ribbon 界面，全部处理在本机完成，不联�
 ![macOS 11+](https://img.shields.io/badge/macOS-11%2B-000000?logo=apple&logoColor=white)
 ![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-arm64-2f6f4e)
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776ab?logo=python&logoColor=white)
-![版本](https://img.shields.io/badge/version-1.0.0-blue)
+![版本](https://img.shields.io/badge/version-3.0.0-blue)
 ![许可证](https://img.shields.io/badge/license-MIT-green)
 
 </div>
@@ -59,14 +59,14 @@ macOS 原生桌面应用，Ribbon 界面，全部处理在本机完成，不联�
 
 ## 下载安装
 
-从 [Releases](https://github.com/liyu253178/PDF-Invoice-Merger-Tool/releases) 页面下载，或直接用仓库里随附的构建产物：
+从 [Releases](https://github.com/liyu253178/pdf-merger-macos/releases/tag/v3.0.0) 页面下载：
 
 | | |
 |---|---|
-| **下载** | [`release/PDF-Toolbox-v1.0.0-macOS-arm64.zip`](release/PDF-Toolbox-v1.0.0-macOS-arm64.zip)（43.4 MB） |
+| **下载** | [`PDF-Toolbox-v3.0.0-macOS-arm64.zip`](https://github.com/liyu253178/pdf-merger-macos/releases/download/v3.0.0/PDF-Toolbox-v3.0.0-macOS-arm64.zip)（42.8 MB，Release 资产） |
 | **安装** | 解压，把 `PDF 工具箱.app` 拖进「应用程序」文件夹 |
 | **要求** | macOS 11 Big Sur 或更高，Apple Silicon（M 系列）芯片 |
-| **SHA-256** | `68d1777241f07813a38fb15dfdfe80decd928121ca0caba413c2cc6c2a49db4e` |
+| **SHA-256** | `9bac1fb95373e12d6f5ca150eb5bc2382950fb6e688469c569c098a36dbccf6c` |
 
 > **首次打开被拦下？** 这个包没有 Apple 开发者签名，macOS 会提示「无法验证开发者」。
 > 在「访达」里**右键点击 App → 打开**，再在弹窗里点一次「打开」即可，之后就不再询问。
@@ -74,7 +74,7 @@ macOS 原生桌面应用，Ribbon 界面，全部处理在本机完成，不联�
 >
 > 也可以先核对校验值，确认下载完整：
 > ```bash
-> shasum -a 256 PDF-Toolbox-v1.0.0-macOS-arm64.zip
+> shasum -a 256 PDF-Toolbox-v3.0.0-macOS-arm64.zip
 > ```
 
 ## 三步上手
@@ -192,8 +192,8 @@ macOS 原生桌面应用，Ribbon 界面，全部处理在本机完成，不联�
 要求 **macOS 11+、Python 3.9+**。
 
 ```bash
-git clone https://github.com/liyu253178/PDF-Invoice-Merger-Tool.git
-cd PDF-Invoice-Merger-Tool
+git clone https://github.com/liyu253178/pdf-merger-macos.git
+cd pdf-merger-macos
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python main.py
@@ -287,7 +287,7 @@ QtCharts / QtLocation / QtGraphs / QtPdf … 连同各自的 QML 模块、metaty
 ## 项目结构
 
 ```text
-PDF-Invoice-Merger-Tool/
+pdf-merger-macos/
 ├── main.py                 入口（含 --selftest）
 ├── setup.py                py2app 打包配置（含本地化声明与模块排除）
 ├── build_thin.py           产物瘦身：白名单删模块 + 二进制切片 + 自检 + 体积守卫
@@ -313,7 +313,6 @@ PDF-Invoice-Merger-Tool/
 │   ├── icon-1024.png       图标源图 / 源码运行时的窗口图标
 │   ├── lproj/              中/英文界面语言声明（决定原生文件面板的语言）
 │   └── 界面-*.png           界面截图
-├── release/                已构建的发布包
 ├── tests/
 │   ├── run_all.sh          一键跑完全部回归
 │   ├── test_e2e.py         端到端功能测试（含异常边界）
@@ -462,10 +461,10 @@ macOS 默认不装微软雅黑，它通常随 Microsoft Office 一起安装。
 
 | 项 | 值 |
 |---|---|
-| 版本 | **1.0.0** |
+| 版本 | **3.0.0** |
 | Bundle Identifier | `com.local.pdftoolkit` |
-| 构建产物 | `PDF 工具箱.app`，117.6 MB，arm64 |
-| 发布包 | `PDF-Toolbox-v1.0.0-macOS-arm64.zip`，43.4 MB |
+| 构建产物 | `PDF 工具箱.app`，115.9 MB，arm64 |
+| 发布包 | `PDF-Toolbox-v3.0.0-macOS-arm64.zip`，42.8 MB |
 | 自检项 | 12 项全部通过 |
 | 依赖 | PySide6-Essentials ≥ 6.6、PyMuPDF ≥ 1.24、py2app ≥ 0.28（仅构建） |
 
