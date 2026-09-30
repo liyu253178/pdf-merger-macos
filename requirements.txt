@@ -1,4 +1,14 @@
-PySide6>=6.10.0
-PyMuPDF>=1.26.0
-Pillow>=10.0.0
-py2app>=0.29.0
+# 刻意使用 PySide6-Essentials 而非完整版 PySide6：
+# 完整版会额外拖入 Addons 子包（QtCharts / Qt3D / QtMultimedia / QtWebEngine 等），
+# 本应用一行都用不到，却会让安装体积和打包后的 App 显著变大。
+PySide6-Essentials>=6.6
+
+# PDF 引擎。注意其许可证为 AGPL-3.0，闭源分发需另行考虑。
+PyMuPDF>=1.24
+
+# 刻意不引入 Pillow：
+# 图片转换由 PyMuPDF 原生完成（可直接 open png/jpg/tif/bmp，convert_to_pdf 在内存完成），
+# 少一个 14 MB 依赖，且实测输出体积更小。
+
+# 打包工具（仅构建时需要）
+py2app>=0.28

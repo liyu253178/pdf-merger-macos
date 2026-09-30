@@ -1,372 +1,165 @@
-import sys
-import os
-import logging
-import traceback
-from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                               QPushButton, QListWidget, QLabel, QFileDialog, QSpinBox,
-                               QComboBox, QMessageBox, QScrollArea, QProgressBar)
-from PySide6.QtCore import Qt, Signal, QThread
-from PySide6.QtGui import QPixmap, QAction
-from src.core.pdf_merger import PDFMergerCore
+"""主窗口外壳：Ribbon 布局的装配。
 
+窗口本身不含业务逻辑，只负责四件事：
+* 左上角切换模块；
+* 把当前模块的功能带、图层栏、预览区显示出来；
+* 右上角提供「打印」入口，作用于当前模块的预览对象；
+* 转发状态栏消息。
 
-log_file = 'pdf_merger_error.log'
-logging.basicConfig(
-    filename=log_file,
-    level=logging.ERROR,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+功能带放在一条可横向滚动的窄槽里：水印模块功能带完整排开要 1300px 往上，
+窗口一收窄，Qt 就会把按钮压成省略号、下拉框叠在一起 —— 与其让控件变形，
+不如让它整体滚动。滚动条只在需要时出现，且专门留了一条 11px 的槽位。
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QFrame, QHBoxLayout, QLabel, QMainWindow, QScrollArea, QSplitter,
+    QStackedWidget, QTabBar, QVBoxLayout, QWidget,
 )
 
+from .modules import MergeModule, WatermarkModule
+from .ribbon import BAND_HEIGHT, RibbonButton
 
-class PreviewWorker(QThread):
-    preview_ready = Signal(bytes)
-    progress_updated = Signal(int, str)
-    error_occurred = Signal(str)
-
-    def __init__(self, files, rows, cols, orientation):
-        super().__init__()
-        self.files = files.copy()
-        self.rows = rows
-        self.cols = cols
-        self.orientation = orientation
-        self.core = PDFMergerCore()
-
-    def run(self):
-        try:
-            img_data = self.core.generate_preview_image(
-                self.files,
-                rows=self.rows,
-                cols=self.cols,
-                orientation=self.orientation
-            )
-            if img_data:
-                self.preview_ready.emit(img_data)
-        except Exception as e:
-            self.error_occurred.emit(f'预览生成失败：{str(e)}')
-        finally:
-            self.core.cleanup_temp_files()
+SIDE_WIDTH = 208          # 窄图层栏宽度：够看文件名，又不挤压预览
+RIBBON_SCROLLBAR_H = 11   # 功能带下方预留给横向滚动条的高度
 
 
-class MergeWorker(QThread):
-    merge_completed = Signal(str)
-    progress_updated = Signal(int, str)
-    error_occurred = Signal(str)
+class MainWindow(QMainWindow):
+    """左上角切换模块，下方是各自的 Ribbon 功能区与工作区。"""
 
-    def __init__(self, files, rows, cols, orientation, output_file):
-        super().__init__()
-        self.files = files.copy()
-        self.rows = rows
-        self.cols = cols
-        self.orientation = orientation
-        self.output_file = output_file
-        self.core = PDFMergerCore()
-
-    def run(self):
-        try:
-            def progress_callback(value, text):
-                self.progress_updated.emit(value, text)
-
-            output_doc = self.core.merge_files(
-                self.files,
-                rows=self.rows,
-                cols=self.cols,
-                orientation=self.orientation,
-                progress_callback=progress_callback
-            )
-
-            output_doc.save(self.output_file)
-            output_doc.close()
-            self.merge_completed.emit(self.output_file)
-        except Exception as e:
-            self.error_occurred.emit(f'文件合并失败：{str(e)}')
-        finally:
-            self.core.cleanup_temp_files()
-
-
-class PDFMergerWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.files = []
-        self.preview_label = None
-        self.progress_bar = None
-        self.preview_worker = None
-        self.merge_worker = None
-        self.initUI()
+        self.setWindowTitle("PDF 工具箱")
+        self.resize(1360, 860)
+        # 比功能带的完整宽度小得多，但功能带现在会横向滚动，
+        # 所以这个下限只由「图层栏 + 能用的预览区」决定。
+        self.setMinimumWidth(880)
 
-    def log_error(self, error_msg, exc_info=None):
-        if exc_info:
-            logging.error(f"{error_msg}\n{traceback.format_exc()}")
-        else:
-            logging.error(error_msg)
+        self.status = self.statusBar()
+        self.status.showMessage("就绪")
 
-    def initUI(self):
-        self.setWindowTitle('PDF发票合并助手')
-        self.setGeometry(100, 100, 1200, 800)
+        self.merge_module = MergeModule(self._show_status)
+        self.watermark_module = WatermarkModule(self._show_status)
+        self._modules = [self.merge_module, self.watermark_module]
+        # 图层/任务状态一变，打印入口的可用性与提示文字要跟着走
+        for module in self._modules:
+            module.on_state_change = self._sync_print
 
-        self.setup_menu_bar()
+        root = QWidget()
+        column = QVBoxLayout(root)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(0)
 
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        layout = QHBoxLayout(central_widget)
+        column.addWidget(self._build_nav())
+        column.addWidget(self._build_band_stack())
+        column.addWidget(self._build_workspace(), 1)
 
-        left_layout = QVBoxLayout()
+        self.setCentralWidget(root)
+        self._switch_module(0)
+        self._sync_print()
 
-        self.file_list = QListWidget()
-        self.file_list.setSelectionMode(QListWidget.ExtendedSelection)
-        left_layout.addWidget(QLabel('已选择的文件：'))
-        left_layout.addWidget(self.file_list)
+    # ---------- 装配 ----------
 
-        button_layout = QHBoxLayout()
-        add_button = QPushButton('添加文件')
-        remove_button = QPushButton('移除文件')
-        remove_all_button = QPushButton('移除全部文件')
-        button_layout.addWidget(add_button)
-        button_layout.addWidget(remove_button)
-        button_layout.addWidget(remove_all_button)
-        left_layout.addLayout(button_layout)
+    def _build_nav(self) -> QWidget:
+        nav = QWidget()
+        nav.setObjectName("moduleNav")
+        layout = QHBoxLayout(nav)
+        layout.setContentsMargins(8, 5, 8, 0)
+        layout.setSpacing(6)
 
-        middle_layout = QVBoxLayout()
+        self.tabs = QTabBar()
+        self.tabs.setObjectName("moduleTabs")
+        self.tabs.setExpanding(False)
+        self.tabs.setDocumentMode(True)
+        for module in self._modules:
+            self.tabs.addTab(module.title)
+        self.tabs.currentChanged.connect(self._switch_module)
+        layout.addWidget(self.tabs)
 
-        middle_layout.addWidget(QLabel('页面方向：'))
-        self.orientation = QComboBox()
-        self.orientation.addItems(['纵向', '横向'])
-        middle_layout.addWidget(self.orientation)
+        hint = QLabel("拖文件到左侧图层列表即可添加")
+        hint.setObjectName("navHint")
+        layout.addStretch(1)
+        layout.addWidget(hint)
 
-        middle_layout.addWidget(QLabel('每页文件数：'))
-        layout_options = QHBoxLayout()
-        self.rows = QSpinBox()
-        self.cols = QSpinBox()
-        self.rows.setMinimum(1)
-        self.cols.setMinimum(1)
-        self.rows.setValue(3)
-        self.cols.setValue(2)
-        layout_options.addWidget(QLabel('行数：'))
-        layout_options.addWidget(self.rows)
-        layout_options.addWidget(QLabel('列数：'))
-        layout_options.addWidget(self.cols)
-        middle_layout.addLayout(layout_options)
+        self.btn_print = RibbonButton("打印", "print", compact=True)
+        self.btn_print.clicked.connect(self._print_current)
+        layout.addWidget(self.btn_print)
+        return nav
 
-        self.merge_button = QPushButton('合并文件')
-        self.merge_button.setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; padding: 10px; }")
-        middle_layout.addWidget(self.merge_button)
+    def _build_band_stack(self) -> QScrollArea:
+        self._band_stack = QStackedWidget()
+        for module in self._modules:
+            self._band_stack.addWidget(module.band)
 
-        middle_layout.addStretch()
-
-        right_layout = QVBoxLayout()
-        right_layout.addWidget(QLabel('预览：'))
-
-        preview_scroll = QScrollArea()
-
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setAlignment(Qt.AlignCenter)
-        self.progress_bar.setTextVisible(True)
-        right_layout.addWidget(self.progress_bar)
-
-        preview_scroll.setWidgetResizable(True)
-        preview_container = QWidget()
-        preview_layout = QVBoxLayout(preview_container)
-        self.preview_label = QLabel()
-        self.preview_label.setAlignment(Qt.AlignCenter)
-        self.preview_label.setStyleSheet("QLabel { background-color: #f5f5f5; }")
-        preview_layout.addWidget(self.preview_label)
-        preview_scroll.setWidget(preview_container)
-        right_layout.addWidget(preview_scroll)
-
-        layout.addLayout(left_layout, 2)
-        layout.addLayout(middle_layout, 1)
-        layout.addLayout(right_layout, 3)
-
-        add_button.clicked.connect(self.add_files)
-        remove_button.clicked.connect(self.remove_files)
-        remove_all_button.clicked.connect(self.remove_all_files)
-        self.merge_button.clicked.connect(self.merge_files)
-        self.orientation.currentIndexChanged.connect(self.update_preview)
-        self.rows.valueChanged.connect(self.update_preview)
-        self.cols.valueChanged.connect(self.update_preview)
-
-    def setup_menu_bar(self):
-        menu_bar = self.menuBar()
-
-        file_menu = menu_bar.addMenu('文件')
-
-        add_action = QAction('添加文件', self)
-        add_action.setShortcut('Ctrl+O')
-        add_action.triggered.connect(self.add_files)
-
-        remove_action = QAction('移除选中', self)
-        remove_action.setShortcut('Delete')
-        remove_action.triggered.connect(self.remove_files)
-
-        clear_action = QAction('清空列表', self)
-        clear_action.setShortcut('Ctrl+Shift+Delete')
-        clear_action.triggered.connect(self.remove_all_files)
-
-        merge_action = QAction('合并文件', self)
-        merge_action.setShortcut('Ctrl+M')
-        merge_action.triggered.connect(self.merge_files)
-
-        quit_action = QAction('退出', self)
-        quit_action.setShortcut('Ctrl+Q')
-        quit_action.triggered.connect(self.close)
-
-        file_menu.addAction(add_action)
-        file_menu.addAction(remove_action)
-        file_menu.addAction(clear_action)
-        file_menu.addSeparator()
-        file_menu.addAction(merge_action)
-        file_menu.addSeparator()
-        file_menu.addAction(quit_action)
-
-        help_menu = menu_bar.addMenu('帮助')
-        about_action = QAction('关于', self)
-        about_action.triggered.connect(self.show_about)
-        help_menu.addAction(about_action)
-
-    def show_about(self):
-        QMessageBox.about(self, '关于', 'PDF发票合并助手\n\n版本: 2.0.0\n\n基于 PySide6 + PyMuPDF 构建\n专为 macOS 26 及 M 系列芯片优化')
-
-    def add_files(self):
-        files, _ = QFileDialog.getOpenFileNames(
-            self,
-            "选择文件",
-            "",
-            "支持的文件 (*.pdf *.jpg *.jpeg *.png *.tif *.bmp)"
+        scroll = QScrollArea()
+        scroll.setObjectName("ribbonScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setFocusPolicy(Qt.NoFocus)
+        scroll.setWidget(self._band_stack)
+        # 功能带是定高的，滚动条要另占一条窄槽：不留高度的话，窗口一窄
+        # 滚动条就会压在组名上。不需要滚动时把这条槽收掉，免得功能带
+        # 下面永远挂着一条空带。
+        bar = scroll.horizontalScrollBar()
+        bar.rangeChanged.connect(
+            lambda lo, hi: scroll.setFixedHeight(
+                BAND_HEIGHT + (RIBBON_SCROLLBAR_H if hi > lo else 0))
         )
-        for file in files:
-            if file not in self.files:
-                self.files.append(file)
-                self.file_list.addItem(os.path.basename(file))
-        if files:
-            self.update_preview()
-        self.update_progress_bar()
+        scroll.setFixedHeight(BAND_HEIGHT)
+        self.ribbon_scroll = scroll
+        return scroll
 
-    def remove_files(self):
-        for item in self.file_list.selectedItems():
-            idx = self.file_list.row(item)
-            self.file_list.takeItem(idx)
-            self.files.pop(idx)
-        self.update_preview()
-        self.update_progress_bar()
+    def _build_workspace(self) -> QSplitter:
+        self._side_stack = QStackedWidget()
+        self._center_stack = QStackedWidget()
+        self._side_stack.setMinimumWidth(178)
 
-    def remove_all_files(self):
-        self.files.clear()
-        self.file_list.clear()
-        self.update_preview()
-        self.update_progress_bar()
+        for module in self._modules:
+            self._side_stack.addWidget(module.sidebar)
+            self._center_stack.addWidget(module.center)
 
-    def update_progress_bar(self):
-        total_files = len(self.files)
-        if total_files == 0:
-            self.progress_bar.setValue(0)
-            self.progress_bar.setFormat("等待添加文件")
-        else:
-            self.progress_bar.setValue(100)
-            self.progress_bar.setFormat(f"已选择 {total_files} 个文件")
+        splitter = QSplitter(Qt.Horizontal)
+        splitter.setHandleWidth(4)
+        splitter.addWidget(self._side_stack)
+        splitter.addWidget(self._center_stack)
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
+        splitter.setSizes([SIDE_WIDTH, self.width() - SIDE_WIDTH])
+        return splitter
 
-    def update_preview(self):
-        if not self.files:
-            self.preview_label.clear()
+    # ---------- 切换 ----------
+
+    def _active_module(self):
+        index = self.tabs.currentIndex()
+        if not 0 <= index < len(self._modules):
+            return self._modules[0]
+        return self._modules[index]
+
+    def _switch_module(self, index: int) -> None:
+        if not 0 <= index < len(self._modules):
             return
+        self._band_stack.setCurrentIndex(index)
+        self._side_stack.setCurrentIndex(index)
+        self._center_stack.setCurrentIndex(index)
+        self._sync_print()
+        self._show_status(f"当前模块：{self._modules[index].title}")
 
-        if self.preview_worker and self.preview_worker.isRunning():
-            self.preview_worker.quit()
-            self.preview_worker.wait()
+    # ---------- 打印 ----------
 
-        self.progress_bar.setValue(0)
-        self.progress_bar.setFormat("正在生成预览...")
+    def _sync_print(self) -> None:
+        module = self._active_module()
+        self.btn_print.setEnabled(module.can_print())
+        self.btn_print.setToolTip(module.print_hint())
 
-        self.preview_worker = PreviewWorker(
-            self.files,
-            rows=self.rows.value(),
-            cols=self.cols.value(),
-            orientation=self.orientation.currentText()
-        )
-        self.preview_worker.preview_ready.connect(self.on_preview_ready)
-        self.preview_worker.error_occurred.connect(self.on_preview_error)
-        self.preview_worker.finished.connect(self.on_preview_finished)
-        self.preview_worker.start()
+    def _print_current(self) -> None:
+        self._active_module().print_current()
+        self._sync_print()
 
-    def on_preview_ready(self, img_data):
-        qimg = QPixmap()
-        qimg.loadFromData(img_data)
-        self.preview_label.setPixmap(qimg)
+    # ---------- 状态 ----------
 
-    def on_preview_error(self, error_msg):
-        self.log_error(error_msg)
-        QMessageBox.warning(self, '警告', error_msg)
-        self.preview_label.clear()
-        self.progress_bar.setValue(0)
-        self.progress_bar.setFormat("预览生成失败")
-
-    def on_preview_finished(self):
-        self.progress_bar.setValue(100)
-        self.progress_bar.setFormat("预览完成")
-
-    def merge_files(self):
-        if not self.files:
-            QMessageBox.warning(self, '警告', '请先添加文件！')
-            return
-
-        output_file, _ = QFileDialog.getSaveFileName(
-            self,
-            "保存合并后的PDF",
-            "",
-            "PDF文件 (*.pdf)"
-        )
-
-        if not output_file:
-            return
-
-        if self.merge_worker and self.merge_worker.isRunning():
-            self.merge_worker.quit()
-            self.merge_worker.wait()
-
-        self.progress_bar.setValue(0)
-        self.progress_bar.setFormat("正在处理文件...")
-        self.merge_button.setEnabled(False)
-
-        self.merge_worker = MergeWorker(
-            self.files,
-            rows=self.rows.value(),
-            cols=self.cols.value(),
-            orientation=self.orientation.currentText(),
-            output_file=output_file
-        )
-        self.merge_worker.merge_completed.connect(self.on_merge_completed)
-        self.merge_worker.progress_updated.connect(self.on_merge_progress)
-        self.merge_worker.error_occurred.connect(self.on_merge_error)
-        self.merge_worker.finished.connect(self.on_merge_finished)
-        self.merge_worker.start()
-
-    def on_merge_progress(self, value, text):
-        self.progress_bar.setValue(value)
-        self.progress_bar.setFormat(text)
-
-    def on_merge_completed(self, output_file):
-        QMessageBox.information(self, '成功', '文件合并完成！')
-        self.progress_bar.setValue(100)
-        self.progress_bar.setFormat("合并完成")
-
-    def on_merge_error(self, error_msg):
-        self.log_error(error_msg)
-        QMessageBox.critical(self, '错误', error_msg)
-        self.progress_bar.setValue(0)
-        self.progress_bar.setFormat("合并失败")
-
-    def on_merge_finished(self):
-        self.merge_button.setEnabled(True)
-
-
-def main():
-    app = QApplication(sys.argv)
-    app.setStyle('Fusion')
-
-    merger = PDFMergerWindow()
-    merger.show()
-
-    sys.exit(app.exec())
-
-
-if __name__ == '__main__':
-    main()
+    def _show_status(self, message: str) -> None:
+        self.status.showMessage(message.split("\n")[0])

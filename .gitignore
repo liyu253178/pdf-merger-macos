@@ -1,8 +1,26 @@
+# ---- 构建环境 ----
+.venv-build/
+.venv-sys/
+.venv/
+venv/
+
+# ---- 构建产物（发布用的压缩包放在 release/，不受此处影响）----
 build/
 dist/
-*.pyc
-__pycache__/
+old_build_*/
+old_dist_*/
+build.old.*
+dist.old.*
 *.egg-info/
-.venv/
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+
+# ---- macOS ----
+.DS_Store
+._*
+
+# ---- 日志与临时文件 ----
 *.log
-*.DS_Store
+*.tmp
