@@ -13,14 +13,19 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+import os
+
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QMainWindow, QScrollArea, QSplitter,
-    QStackedWidget, QTabBar, QVBoxLayout, QWidget,
+    QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow, QScrollArea,
+    QSplitter, QStackedWidget, QTabBar, QToolTip, QVBoxLayout, QWidget,
 )
 
+from .icons import svg_icon
 from .modules import MergeModule, WatermarkModule
+from .page_module import PageModule
 from .ribbon import BAND_HEIGHT, RibbonButton
+from .watermark_remove import WatermarkRemoveModule
 
 SIDE_WIDTH = 208          # 窄图层栏宽度：够看文件名，又不挤压预览
 RIBBON_SCROLLBAR_H = 11   # 功能带下方预留给横向滚动条的高度
@@ -39,13 +44,27 @@ class MainWindow(QMainWindow):
 
         self.status = self.statusBar()
         self.status.showMessage("就绪")
+        self.lbl_status_right = QLabel("")
+        self.lbl_status_right.setObjectName("statusRight")
+        self.status.addPermanentWidget(self.lbl_status_right)
+        self._workspace_index = 0
+        self._workspace_modules = []
 
         self.merge_module = MergeModule(self._show_status)
         self.watermark_module = WatermarkModule(self._show_status)
-        self._modules = [self.merge_module, self.watermark_module]
-        # 图层/任务状态一变，打印入口的可用性与提示文字要跟着走
-        for module in self._modules:
+        self.watermark_remove_module = WatermarkRemoveModule(self._show_status)
+        self.page_module = PageModule(self._show_status)
+        # 顶部一级导航只放三个模块；水印下面再分「加水印 / 去水印」。
+        self._modules = [self.merge_module, self.watermark_module, self.page_module]
+        self._workspace_modules = [
+            self.merge_module,
+            self.watermark_module,
+            self.watermark_remove_module,
+            self.page_module,
+        ]
+        for module in self._workspace_modules:
             module.on_state_change = self._sync_print
+        self._workspace_index = 0
 
         root = QWidget()
         column = QVBoxLayout(root)
@@ -73,10 +92,23 @@ class MainWindow(QMainWindow):
         self.tabs.setObjectName("moduleTabs")
         self.tabs.setExpanding(False)
         self.tabs.setDocumentMode(True)
-        for module in self._modules:
-            self.tabs.addTab(module.title)
+        tab_icons = ["merge", "stamp", "grid"]
+        for i, module in enumerate(self._modules):
+            index = self.tabs.addTab(module.title)
+            if i < len(tab_icons):
+                self.tabs.setTabIcon(index, svg_icon(tab_icons[i]))
         self.tabs.currentChanged.connect(self._switch_module)
         layout.addWidget(self.tabs)
+
+        self.watermark_subtabs = QTabBar()
+        self.watermark_subtabs.setObjectName("subTabs")
+        self.watermark_subtabs.setExpanding(False)
+        self.watermark_subtabs.setDocumentMode(True)
+        self.watermark_subtabs.addTab("加水印")
+        self.watermark_subtabs.addTab("去水印")
+        self.watermark_subtabs.setVisible(False)
+        self.watermark_subtabs.currentChanged.connect(self._switch_watermark)
+        layout.addWidget(self.watermark_subtabs)
 
         hint = QLabel("拖文件到左侧图层列表即可添加")
         hint.setObjectName("navHint")
@@ -90,7 +122,8 @@ class MainWindow(QMainWindow):
 
     def _build_band_stack(self) -> QScrollArea:
         self._band_stack = QStackedWidget()
-        for module in self._modules:
+        self._band_stack.setObjectName("ribbonStack")
+        for module in self._workspace_modules:
             self._band_stack.addWidget(module.band)
 
         scroll = QScrollArea()
@@ -118,7 +151,7 @@ class MainWindow(QMainWindow):
         self._center_stack = QStackedWidget()
         self._side_stack.setMinimumWidth(178)
 
-        for module in self._modules:
+        for module in self._workspace_modules:
             self._side_stack.addWidget(module.sidebar)
             self._center_stack.addWidget(module.center)
 
@@ -134,19 +167,39 @@ class MainWindow(QMainWindow):
     # ---------- 切换 ----------
 
     def _active_module(self):
-        index = self.tabs.currentIndex()
-        if not 0 <= index < len(self._modules):
-            return self._modules[0]
-        return self._modules[index]
+        if not self._workspace_modules:
+            return None
+        index = self._workspace_index
+        if not 0 <= index < len(self._workspace_modules):
+            return self._workspace_modules[0]
+        return self._workspace_modules[index]
 
     def _switch_module(self, index: int) -> None:
         if not 0 <= index < len(self._modules):
             return
-        self._band_stack.setCurrentIndex(index)
-        self._side_stack.setCurrentIndex(index)
-        self._center_stack.setCurrentIndex(index)
+        self.watermark_subtabs.setVisible(index == 1)
+        if index == 1:
+            workspace_index = 1 + max(0, self.watermark_subtabs.currentIndex())
+        elif index == 0:
+            workspace_index = 0
+        else:
+            workspace_index = 3
+        self._show_workspace(workspace_index)
+
+    def _switch_watermark(self, index: int) -> None:
+        if self.tabs.currentIndex() != 1:
+            return
+        self._show_workspace(1 + max(0, index))
+
+    def _show_workspace(self, workspace_index: int) -> None:
+        if not 0 <= workspace_index < len(self._workspace_modules):
+            return
+        self._workspace_index = workspace_index
+        self._band_stack.setCurrentIndex(workspace_index)
+        self._side_stack.setCurrentIndex(workspace_index)
+        self._center_stack.setCurrentIndex(workspace_index)
         self._sync_print()
-        self._show_status(f"当前模块：{self._modules[index].title}")
+        self._show_status(f"当前模块：{self._active_module().title}")
 
     # ---------- 打印 ----------
 
@@ -154,6 +207,32 @@ class MainWindow(QMainWindow):
         module = self._active_module()
         self.btn_print.setEnabled(module.can_print())
         self.btn_print.setToolTip(module.print_hint())
+        self._refresh_module_status()
+
+    def _refresh_module_status(self) -> None:
+        module = self._active_module()
+        if module is None:
+            self.lbl_status_right.setText("")
+            return
+        text = ""
+        if hasattr(module, "status_text"):
+            try:
+                text = module.status_text()
+            except Exception:
+                text = ""
+        if not text:
+            files = getattr(module, "files", None)
+            if files is not None:
+                path = files.focus_path()
+                if not path:
+                    sources = files.source_paths()
+                    path = sources[0] if sources else None
+                if path:
+                    count = files.total_pages()
+                    text = os.path.basename(path)
+                    if count:
+                        text += f" · 共 {count} 页"
+        self.lbl_status_right.setText(text)
 
     def _print_current(self) -> None:
         self._active_module().print_current()
@@ -163,3 +242,31 @@ class MainWindow(QMainWindow):
 
     def _show_status(self, message: str) -> None:
         self.status.showMessage(message.split("\n")[0])
+        self._refresh_module_status()
+
+    # ---------- 退出 ----------
+
+    def closeEvent(self, event):  # noqa: N802 - Qt 命名
+        """关闭主窗口即结束进程，不在 Dock / 后台继续驻留。
+
+        macOS 上偶尔会残留一个不可见的 tooltip 顶层窗口，Qt 因此不认为
+        「最后一个窗口已关闭」，quitOnLastWindowClosed 不生效。这里显式
+        调用 quit，保证关闭窗口后事件循环结束、进程退出。
+        """
+        try:
+            if not self.page_module.can_close():
+                event.ignore()
+                return
+        except Exception:
+            pass
+        for module in self._workspace_modules:
+            try:
+                module.shutdown()
+            except Exception:
+                pass
+        QToolTip.hideText()
+        event.accept()
+        super().closeEvent(event)
+        app = QApplication.instance()
+        if app is not None:
+            QTimer.singleShot(0, app.quit)

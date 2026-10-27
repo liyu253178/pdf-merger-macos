@@ -255,6 +255,7 @@ def main() -> int:
         return selftest()
 
     app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(True)
     app.setApplicationName(APP_NAME)
     app.setApplicationDisplayName(APP_NAME)
     # Fusion 在 macOS 上对 QSS 的支持比原生风格更一致，配色也更好控制

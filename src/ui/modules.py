@@ -15,12 +15,13 @@ import os
 
 import pymupdf
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QApplication, QColorDialog, QComboBox, QDoubleSpinBox, QFileDialog, QLabel,
-    QLineEdit, QMessageBox, QProgressBar, QProgressDialog, QSlider, QSpinBox,
-    QVBoxLayout, QWidget,
+    QApplication, QColorDialog, QComboBox, QDoubleSpinBox, QFileDialog,
+    QHBoxLayout, QLabel, QLineEdit, QMenu, QMessageBox, QProgressBar,
+    QProgressDialog, QPushButton, QSlider, QSpinBox, QStackedLayout,
+    QStackedWidget, QToolButton, QVBoxLayout, QWidget,
 )
 
 from ..core.fonts import default_font, discover_fonts
@@ -32,9 +33,14 @@ from ..core.watermark import (
 )
 from .print_pdf import ask_printer, print_pdf, selected_pages
 from .ribbon import (
-    RibbonBand, RibbonButton, button_group, control_row_group, form_group, row_widget,
+    RibbonBand, RibbonButton, button_group, control_row_group, form_group,
+    row_widget, stack_group,
 )
-from .widgets import MODE_EFFECT, MODE_FILE, ColorChip, LayerList, PreviewPane
+from .icons import svg_icon
+from .widgets import (
+    MODE_EFFECT, MODE_FILE, ChoiceField, ColorChip, EmptyState, LayerList,
+    PreviewPane, Stepper,
+)
 from .workers import Debouncer, TaskWorker
 
 PREVIEW_DEBOUNCE_MS = 260
@@ -54,6 +60,9 @@ class Module:
     accept_images: bool = True
     empty_hint: str = "尚未添加文件"
     accept_filter: str = "支持的文件 (*.pdf *.png *.jpg *.jpeg *.tif *.tiff *.bmp *.webp)"
+    layer_show_index: bool = True
+    layer_trailing: str = "drag"
+    layer_source_note: str = ""
 
     def __init__(self, status):
         self._emit_status = status
@@ -70,8 +79,12 @@ class Module:
         self.on_state_change = None
 
         self.files = LayerList(accept_images=self.accept_images)
+        self.files.set_show_index(self.layer_show_index)
+        self.files.set_trailing(self.layer_trailing)
+        self.files.set_source_note(self.layer_source_note)
         self.files.files_changed.connect(self._on_files_changed)
         self.files.layer_activated.connect(self._on_layer_activated)
+        self.files.visibility_toggled.connect(self._on_visibility_toggled)
 
         self.lbl_count = QLabel(self.empty_hint)
         self.lbl_count.setObjectName("sideCount")
@@ -87,6 +100,7 @@ class Module:
         self.progress = QProgressBar()
         self.progress.setTextVisible(True)
         self.progress.setFormat("就绪")
+        self.progress.setVisible(False)
 
         self._preview_debounce = Debouncer(PREVIEW_DEBOUNCE_MS, self._render_preview)
 
@@ -103,19 +117,49 @@ class Module:
         panel.setObjectName("sidePanel")
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(9, 10, 9, 9)
-        layout.setSpacing(5)
+        layout.setSpacing(6)
 
+        header = QWidget()
+        header.setObjectName("sideHeader")
+        head = QHBoxLayout(header)
+        head.setContentsMargins(2, 0, 0, 0)
+        head.setSpacing(2)
         title = QLabel("图层")
         title.setObjectName("sideTitle")
-        layout.addWidget(title)
+        head.addWidget(title)
+        head.addStretch(1)
+        self.btn_side_add = QToolButton()
+        self.btn_side_add.setObjectName("sideIconBtn")
+        self.btn_side_add.setIcon(svg_icon("plus"))
+        self.btn_side_add.setIconSize(QSize(14, 14))
+        self.btn_side_add.setToolTip("添加文件")
+        self.btn_side_add.clicked.connect(self.add_files)
+        self.btn_side_more = QToolButton()
+        self.btn_side_more.setObjectName("sideIconBtn")
+        self.btn_side_more.setIcon(svg_icon("more"))
+        self.btn_side_more.setIconSize(QSize(14, 14))
+        self.btn_side_more.setToolTip("图层操作")
+        self.btn_side_more.clicked.connect(self._show_layer_menu)
+        head.addWidget(self.btn_side_add)
+        head.addWidget(self.btn_side_more)
+        layout.addWidget(header)
         layout.addWidget(self.files, 1)
         layout.addWidget(self.lbl_count)
-
-        hint = QLabel("双击图层设为当前预览对象")
-        hint.setObjectName("sideHint")
-        hint.setWordWrap(True)
-        layout.addWidget(hint)
         return panel
+
+    def _show_layer_menu(self) -> None:
+        menu = QMenu(self.center)
+        act_add = menu.addAction("添加文件…")
+        act_remove = menu.addAction("移除选中图层")
+        act_clear = menu.addAction("清空图层")
+        act_add.triggered.connect(self.add_files)
+        act_remove.triggered.connect(self.files.remove_selected)
+        act_clear.triggered.connect(self.files.clear_all)
+        menu.exec(self.btn_side_more.mapToGlobal(
+            self.btn_side_more.rect().bottomLeft()))
+
+    def _on_visibility_toggled(self, _path: str) -> None:
+        """子类可覆盖：眼睛状态变化时刷新预览。"""
 
     def _build_center(self) -> QWidget:
         panel = QWidget()
@@ -143,8 +187,12 @@ class Module:
             # 当前预览对象被移除或清空了，退回效果预览，别留一张过期的图
             self._set_preview_mode(MODE_EFFECT)
         self.preview.set_file_mode_available(self.files.count() > 0)
+        self._update_empty_state()
         self._sync_buttons()
         self._preview_debounce.trigger()
+
+    def _update_empty_state(self) -> None:
+        """子类可覆盖：在无文件时切换空态。"""
 
     def _busy(self) -> bool:
         return self._worker is not None and self._worker.isRunning()
@@ -335,6 +383,15 @@ class Module:
 
     # ---------- 后台任务 ----------
 
+    def _set_progress_state(self, state: str) -> None:
+        """切换进度条语义色：running / success / error / warning。
+
+        Qt 不会因为动态属性变化自动重算 QSS，必须 unpolish + polish 一次。
+        """
+        self.progress.setProperty("state", state)
+        self.progress.style().unpolish(self.progress)
+        self.progress.style().polish(self.progress)
+
     def _run_task(self, job, ok_title: str, report, output_path: str = "",
                   results=None) -> None:
         """跑一个后台作业。
@@ -343,6 +400,9 @@ class Module:
         这些文件会作为新图层自动插到列表最上方。
         """
         self._last_output = output_path
+        self.progress.setVisible(True)
+        self.progress.setValue(0)
+        self._set_progress_state("running")
         worker = TaskWorker(job, None)
         worker.progressed.connect(self._on_progress)
         worker.succeeded.connect(
@@ -365,6 +425,8 @@ class Module:
                  results: list[str]) -> None:
         self.progress.setValue(100)
         self.progress.setFormat("完成")
+        self._set_progress_state("success")
+        QTimer.singleShot(1600, lambda: self.progress.setVisible(False))
         detail = message
         if output_path and os.path.exists(output_path):
             detail += f"\n\n文件大小：{os.path.getsize(output_path) / 1024:.1f} KB"
@@ -378,12 +440,23 @@ class Module:
     def _on_failed(self, message: str) -> None:
         self.progress.setValue(0)
         self.progress.setFormat("失败")
+        self._set_progress_state("error")
         self._emit_status(f"出错：{message}")
         QMessageBox.critical(self.center, "出错", message)
 
     def _on_finished(self) -> None:
         self._worker = None
         self._sync_buttons()
+
+    def shutdown(self) -> None:
+        """窗口关闭时通知后台任务退出，不再做任何耗时等待。"""
+        for worker in (self._worker, self._preview_worker):
+            if worker is None:
+                continue
+            try:
+                worker.cancel()
+            except Exception:
+                pass
 
     # ---------- 打印 ----------
 
@@ -484,33 +557,26 @@ class MergeModule(Module):
 
     def __init__(self, status):
         super().__init__(status)
+        self.files.show_title_pages = False
         self._build_ribbon()
         self._connect()
+        self._wrap_empty_state()
         self._sync_buttons()
+        self._update_empty_state()
 
     # ---------- Ribbon ----------
 
     def _build_ribbon(self) -> None:
-        self.cmb_paper = QComboBox()
-        self.cmb_paper.addItems(PAPER_SIZES)
-        self.cmb_paper.setFixedWidth(92)
+        self.cmb_paper = ChoiceField("", PAPER_SIZES, "A4")
+        self.cmb_orientation = ChoiceField("", ["纵向", "横向"], "纵向")
 
-        self.cmb_orientation = QComboBox()
-        self.cmb_orientation.addItems(["纵向", "横向"])
-        self.cmb_orientation.setFixedWidth(92)
-
-        self.spin_rows = QSpinBox()
-        self.spin_rows.setRange(1, 8)
-        self.spin_rows.setValue(3)
-        self.spin_rows.setFixedWidth(70)
-
-        self.spin_cols = QSpinBox()
-        self.spin_cols.setRange(1, 8)
-        self.spin_cols.setValue(2)
-        self.spin_cols.setFixedWidth(70)
+        self.spin_rows = Stepper(1, 8, 3)
+        self.spin_cols = Stepper(1, 8, 2)
 
         self.lbl_per_page = QLabel("6 份")
         self.lbl_per_page.setProperty("ribbonField", "true")
+        self.lbl_per_page.setAlignment(Qt.AlignCenter)
+        self.lbl_per_page.setMinimumWidth(42)
 
         self.btn_add = RibbonButton("添加文件", "open")
         self.btn_remove = RibbonButton("移除", "remove")
@@ -525,26 +591,125 @@ class MergeModule(Module):
         self.set_band(RibbonBand(
             [
                 button_group("文件", [self.btn_add, self.btn_remove, self.btn_clear]),
-                form_group("版面", [("纸张", self.cmb_paper),
-                                    ("方向", self.cmb_orientation)]),
-                form_group("拼版", [("行数", self.spin_rows),
-                                    ("列数", self.spin_cols),
-                                    ("每页", self.lbl_per_page)]),
+                stack_group("版面", [("纸张", self.cmb_paper),
+                                     ("方向", self.cmb_orientation)]),
+                stack_group("拼版", [("行数", self.spin_rows),
+                                     ("列数", self.spin_cols),
+                                     ("每页", self.lbl_per_page)]),
             ],
             trailing=button_group("输出", [self.btn_merge]),
         ))
 
     def _connect(self) -> None:
         for widget in (self.cmb_paper, self.cmb_orientation):
-            widget.currentIndexChanged.connect(self._on_params_changed)
+            widget.changed.connect(self._on_params_changed)
         for widget in (self.spin_rows, self.spin_cols):
             widget.valueChanged.connect(self._update_per_page)
             widget.valueChanged.connect(self._on_params_changed)
         self._update_per_page()
 
+    def _wrap_empty_state(self) -> None:
+        self._inner_center = self.center
+
+        # 空态只盖在画布上，保留顶部的「效果预览 / 文件预览」和缩放工具，
+        # 和原型 12 一致。StackAll 让预览头始终可见，卡片层负责拦截空态点击。
+        host = QWidget()
+        stack = QStackedLayout(host)
+        stack.setContentsMargins(0, 0, 0, 0)
+        stack.setStackingMode(QStackedLayout.StackAll)
+        stack.addWidget(self._inner_center)
+
+        self._empty = EmptyState(
+            "merge",
+            "添加 PDF 或图片，开始拼版",
+            "支持 PDF、图片、多页文件；原文件不会被修改。",
+            "添加文件",
+        )
+        self._empty.setMinimumSize(520, 320)
+        self._empty.subtitle.setMinimumWidth(360)
+        self._empty.button.setIcon(svg_icon("plus"))
+        self._empty.button.setIconSize(QSize(14, 14))
+        self._empty.action.connect(self.add_files)
+
+        self._empty_wrap = QWidget()
+        self._empty_wrap.setObjectName("mergeEmptyWrap")
+        box = QVBoxLayout(self._empty_wrap)
+        # 顶部留出预览工具条的高度，空态卡片在剩余画布里居中。
+        box.setContentsMargins(24, 56, 24, 24)
+        box.addStretch(1)
+        box.addWidget(self._empty, 0, Qt.AlignHCenter)
+        box.addStretch(1)
+        stack.addWidget(self._empty_wrap)
+        self._empty_wrap.raise_()
+        self.center = host
+        self._install_side_empty()
+        self.preview.set_footer_chip("")
+
+    def _install_side_empty(self) -> None:
+        """在图层列表位置放一个居中的空态，文件加入后切回真实列表。"""
+        layout = self.sidebar.layout()
+        if layout is None:
+            return
+        layout.removeWidget(self.files)
+        empty = QWidget()
+        ev = QVBoxLayout(empty)
+        ev.setContentsMargins(8, 0, 8, 0)
+        ev.addStretch(1)
+        icon = QLabel()
+        icon.setPixmap(svg_icon("merge").pixmap(QSize(30, 30)))
+        icon.setAlignment(Qt.AlignCenter)
+        title = QLabel("尚未添加文件")
+        title.setObjectName("sideEmptyTitle")
+        title.setAlignment(Qt.AlignCenter)
+        sub = QLabel("点上方「添加文件」导入")
+        sub.setObjectName("sideEmptySub")
+        sub.setAlignment(Qt.AlignCenter)
+        ev.addWidget(icon)
+        ev.addWidget(title)
+        ev.addWidget(sub)
+        ev.addStretch(1)
+
+        self._side_empty_stack = QStackedWidget()
+        self._side_empty_stack.addWidget(empty)
+        self._side_empty_stack.addWidget(self.files)
+        layout.insertWidget(1, self._side_empty_stack, 1)
+
+    def _update_empty_state(self) -> None:
+        if hasattr(self, "_empty_wrap"):
+            empty = self.files.count() == 0
+            self._empty_wrap.setVisible(empty)
+            self.lbl_count.setVisible(not empty)
+            if hasattr(self, "_side_empty_stack"):
+                self._side_empty_stack.setCurrentIndex(0 if empty else 1)
+            self.preview.set_file_mode_available(not empty)
+            self._update_summary()
+
     def _update_per_page(self) -> None:
         per = self.spin_rows.value() * self.spin_cols.value()
         self.lbl_per_page.setText(f"{per} 份")
+        self._update_summary()
+
+    def _update_summary(self) -> None:
+        if not hasattr(self, "preview"):
+            return
+        per = max(1, self.spin_rows.value() * self.spin_cols.value())
+        total = self.files.total_pages()
+        out_pages = (total + per - 1) // per if total else 0
+        if total:
+            self.preview.set_header_note(
+                f"{self.spin_rows.value()} 行 × {self.spin_cols.value()} 列 · "
+                f"共输出 {out_pages} 页"
+            )
+            self.preview.set_footer_chip(
+                f"{self.cmb_paper.currentText()} {self.cmb_orientation.currentText()} · "
+                f"{self.spin_rows.value()} 行 × {self.spin_cols.value()} 列 · "
+                f"每页 {per} 份 · 共 {total} 页 → {out_pages} 页"
+            )
+        else:
+            self.preview.set_header_note(
+                f"{self.spin_rows.value()} 行 × {self.spin_cols.value()} 列 · 尚无内容"
+            )
+            self.preview.set_footer_chip("")
 
     def _refresh_buttons(self) -> None:
         has_files = self.files.count() > 0
@@ -553,6 +718,8 @@ class MergeModule(Module):
         self.btn_remove.setEnabled(has_files and not busy)
         self.btn_clear.setEnabled(has_files and not busy)
         self.btn_add.setEnabled(not busy)
+        if hasattr(self, "btn_side_add"):
+            self.btn_side_add.setEnabled(not busy)
 
     def _merger(self) -> PDFMerger:
         return PDFMerger(
@@ -587,14 +754,8 @@ class MergeModule(Module):
 
     def _on_effect_preview_ok(self, payload) -> None:
         data, page_w, page_h = payload
-        self.preview.show_png(
-            data,
-            f"{self.cmb_paper.currentText()} {self.cmb_orientation.currentText()} · "
-            f"{self.spin_rows.value()} 行 × {self.spin_cols.value()} 列 · "
-            f"共 {self.files.count()} 个图层"
-            "（每个 PDF 的全部页面都会展开参与排版）",
-            page_pt=(page_w, page_h),
-        )
+        self._update_summary()
+        self.preview.show_png(data, "", page_pt=(page_w, page_h))
 
     # ---------- 动作 ----------
 
@@ -646,6 +807,9 @@ class WatermarkModule(Module):
     accept_images = False
     empty_hint = "尚未添加 PDF"
     accept_filter = "PDF 文件 (*.pdf)"
+    layer_show_index = False
+    layer_trailing = "eye"
+    layer_source_note = "原件"
 
     def __init__(self, status):
         self._fonts = discover_fonts()

@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
 
 from .icons import svg_icon
 
-BAND_HEIGHT = 118          # 功能带高度，够放四行紧凑表单
+BAND_HEIGHT = 112          # 功能带高度，贴近原型的一行参数 + 组名
 ICON_SIZE = 30
 COMPACT_ICON_SIZE = 16     # 顶部工具条的矮版按钮
 
@@ -42,20 +42,30 @@ class RibbonButton(QToolButton):
             self.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
             self.setIconSize(QSize(COMPACT_ICON_SIZE, COMPACT_ICON_SIZE))
             self.setProperty("ribbonCompact", "true")
+        elif primary:
+            # 主操作改成「图标在左、文字在右」的宽按钮，和原型一致；
+            # 次操作仍保持图标在上、文字在下，形成明确层级。
+            self.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+            self.setIconSize(QSize(18, 18))
+            self.setProperty("ribbon", "true")
+            self.setProperty("ribbonPrimary", "true")
+            self.setProperty("ribbonPrimaryLarge", "true")
+            self.setMinimumHeight(40)
+            self.setMinimumWidth(self._needed_width(text, True))
         else:
             self.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
             self.setIconSize(QSize(ICON_SIZE, ICON_SIZE))
             self.setProperty("ribbon", "true")
-            self.setProperty("ribbonPrimary", "true" if primary else "false")
-            self.setMinimumWidth(self._needed_width(text, primary))
+            self.setProperty("ribbonPrimary", "false")
+            self.setMinimumWidth(self._needed_width(text, False))
         if icon_name:
             self.setIcon(svg_icon(icon_name))
 
     def _needed_width(self, text: str, primary: bool) -> int:
         """文字整行放得下的宽度：主操作左右各留 14px（见 QSS 的 padding）。"""
         text_width = self.fontMetrics().horizontalAdvance(text)
-        base = 96 if primary else 56
-        return max(base, text_width + (34 if primary else 22))
+        base = 132 if primary else 56
+        return max(base, text_width + (58 if primary else 22))
 
 
 class RibbonGroup(QFrame):
@@ -108,6 +118,27 @@ def form_group(title: str, rows: list[tuple[str, QWidget]]) -> RibbonGroup:
         caption = QLabel(label)
         caption.setProperty("ribbonField", "true")
         form.addRow(caption, widget)
+    return group
+
+
+def stack_group(title: str, entries: list[tuple[str, QWidget]],
+                spacing: int = 10) -> RibbonGroup:
+    """小标题在上、控件在下的横向参数组，贴近原型的紧凑排布。"""
+    group = RibbonGroup(title)
+    row = group._use_layout(QHBoxLayout())
+    row.setContentsMargins(0, 2, 0, 0)
+    row.setSpacing(spacing)
+    for label, widget in entries:
+        cell = QWidget()
+        box = QVBoxLayout(cell)
+        box.setContentsMargins(0, 0, 0, 0)
+        box.setSpacing(2)
+        caption = QLabel(label)
+        caption.setProperty("ribbonField", "true")
+        box.addWidget(caption)
+        box.addWidget(widget)
+        row.addWidget(cell)
+    row.addStretch(1)
     return group
 
 

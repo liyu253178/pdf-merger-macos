@@ -152,6 +152,131 @@ _BODIES: dict[str, str] = {
         f'<path d="M15 15l4.6 4.6" stroke="{_STROKE}" stroke-width="1.9" '
         f'stroke-linecap="round"/>'
     ),
+
+    # PDF 文件 —— 图层列表
+    "pdf": (
+        f'<path d="M6.2 3.4h7.4l4.8 4.8v12.4H6.2z" fill="#fef2f2" '
+        f'stroke="#d9534f" stroke-width="1.5" stroke-linejoin="round"/>'
+        f'<path d="M13.6 3.4v4.8h4.8" fill="none" stroke="#d9534f" stroke-width="1.5"/>'
+        f'<path d="M9 12.4h6M9 15.6h4.2" stroke="#d9534f" stroke-width="1.3" '
+        f'stroke-linecap="round"/>'
+    ),
+    # 图片 —— 图片图层 / 插入图片
+    "image": (
+        f'<rect x="3.4" y="4.6" width="17.2" height="14.8" rx="2" fill="#f0fdfa" '
+        f'stroke="#0f766e" stroke-width="1.5"/>'
+        f'<circle cx="8.6" cy="9.4" r="1.5" fill="#0f766e"/>'
+        f'<path d="M4.8 16.8l4.4-4.2 3.1 2.8 2.6-2.4 4.3 4.1" fill="none" '
+        f'stroke="#0f766e" stroke-width="1.4" stroke-linejoin="round"/>'
+    ),
+    # 空白页
+    "blank": (
+        f'<path d="M6.2 3.4h7.4l4.8 4.8v12.4H6.2z" fill="none" stroke="{_STROKE}" '
+        f'stroke-width="1.5" stroke-linejoin="round"/>'
+        f'<path d="M13.6 3.4v4.8h4.8" fill="none" stroke="{_STROKE}" stroke-width="1.5"/>'
+    ),
+    # 拖拽手柄（六点）
+    "drag": (
+        f'<circle cx="9" cy="8" r="1" fill="{_STROKE}"/><circle cx="15" cy="8" r="1" fill="{_STROKE}"/>'
+        f'<circle cx="9" cy="12" r="1" fill="{_STROKE}"/><circle cx="15" cy="12" r="1" fill="{_STROKE}"/>'
+        f'<circle cx="9" cy="16" r="1" fill="{_STROKE}"/><circle cx="15" cy="16" r="1" fill="{_STROKE}"/>'
+    ),
+    # 铅笔 —— 当前正在编辑
+    "edit": (
+        f'<path d="M4.8 19.2l3.9-.8 9.8-9.8-3.1-3.1-9.8 9.8z" fill="none" '
+        f'stroke="{_ACCENT}" stroke-width="1.5" stroke-linejoin="round"/>'
+        f'<path d="M13.5 6.4l3.1 3.1" stroke="{_ACCENT}" stroke-width="1.3"/>'
+    ),
+    # 眼睛
+    "eye": (
+        f'<path d="M2.8 12s3.2-5.3 9.2-5.3 9.2 5.3 9.2 5.3-3.2 5.3-9.2 5.3S2.8 12 2.8 12z" '
+        f'fill="none" stroke="{_STROKE}" stroke-width="1.5"/>'
+        f'<circle cx="12" cy="12" r="2.4" fill="none" stroke="{_STROKE}" stroke-width="1.5"/>'
+    ),
+    "eye_off": (
+        f'<path d="M3.2 4.6l17.6 14.8" stroke="{_STROKE}" stroke-width="1.5" stroke-linecap="round"/>'
+        f'<path d="M4.2 9.4C3.4 10.3 2.8 11.2 2.8 12c0 0 3.2 5.3 9.2 5.3 1.4 0 2.7-.3 3.9-.8" '
+        f'fill="none" stroke="{_STROKE}" stroke-width="1.4" stroke-linecap="round"/>'
+        f'<path d="M8.2 6.9A10 10 0 0 1 12 6.3c6 0 9.2 5.7 9.2 5.7a12 12 0 0 1-2.6 3.3" '
+        f'fill="none" stroke="{_STROKE}" stroke-width="1.4" stroke-linecap="round"/>'
+    ),
+    # 加号 / 更多
+    "plus": (
+        f'<path d="M12 5v14M5 12h14" stroke="{_STROKE}" stroke-width="1.8" stroke-linecap="round"/>'
+    ),
+    "more": (
+        f'<circle cx="6" cy="12" r="1.2" fill="{_STROKE}"/><circle cx="12" cy="12" r="1.2" fill="{_STROKE}"/>'
+        f'<circle cx="18" cy="12" r="1.2" fill="{_STROKE}"/>'
+    ),
+    # 向下小箭头
+    "chevron_down": (
+        f'<path d="M7 9.5l5 5 5-5" fill="none" stroke="{_STROKE}" stroke-width="1.8" '
+        f'stroke-linecap="round" stroke-linejoin="round"/>'
+    ),
+    # 左/右旋转
+    "rotate_left": (
+        f'<path d="M5.6 12a6.4 6.4 0 1 0 1.9-4.6" fill="none" stroke="{_STROKE}" '
+        f'stroke-width="1.6" stroke-linecap="round"/>'
+        f'<path d="M12 5.2v4.1l-3-2z" fill="{_STROKE}"/>'
+    ),
+    "rotate_right": (
+        f'<path d="M18.4 12a6.4 6.4 0 1 1-1.9-4.6" fill="none" stroke="{_STROKE}" '
+        f'stroke-width="1.6" stroke-linecap="round"/>'
+        f'<path d="M12 5.2v4.1l3-2z" fill="{_STROKE}"/>'
+    ),
+    "copy": (
+        f'<rect x="7.2" y="7.2" width="11" height="12.4" rx="1.4" fill="none" stroke="{_STROKE}" '
+        f'stroke-width="1.5"/>'
+        f'<path d="M5.4 16.2V5.2a1.2 1.2 0 0 1 1.2-1.2h8.2" fill="none" stroke="{_STROKE}" '
+        f'stroke-width="1.4" stroke-linecap="round"/>'
+    ),
+    "undo": (
+        f'<path d="M8.2 7.2L4.4 11l3.8 3.8" fill="none" stroke="{_STROKE}" '
+        f'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>'
+        f'<path d="M4.8 11h8.4a5.2 5.2 0 0 1 0 10.4h-1.2" fill="none" stroke="{_STROKE}" '
+        f'stroke-width="1.7" stroke-linecap="round"/>'
+    ),
+    "redo": (
+        f'<path d="M15.8 7.2L19.6 11l-3.8 3.8" fill="none" stroke="{_STROKE}" '
+        f'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>'
+        f'<path d="M19.2 11h-8.4a5.2 5.2 0 0 0 0 10.4h1.2" fill="none" stroke="{_STROKE}" '
+        f'stroke-width="1.7" stroke-linecap="round"/>'
+    ),
+    "grid": (
+        f'<rect x="4" y="4" width="6.2" height="6.2" rx="1" fill="none" stroke="{_STROKE}" stroke-width="1.4"/>'
+        f'<rect x="13.8" y="4" width="6.2" height="6.2" rx="1" fill="none" stroke="{_STROKE}" stroke-width="1.4"/>'
+        f'<rect x="4" y="13.8" width="6.2" height="6.2" rx="1" fill="none" stroke="{_STROKE}" stroke-width="1.4"/>'
+        f'<rect x="13.8" y="13.8" width="6.2" height="6.2" rx="1" fill="none" stroke="{_STROKE}" stroke-width="1.4"/>'
+    ),
+    "single": (
+        f'<rect x="5" y="3.8" width="14" height="16.4" rx="1.6" fill="none" stroke="{_STROKE}" stroke-width="1.5"/>'
+        f'<path d="M8.5 8h7M8.5 12h7M8.5 16h4" stroke="{_STROKE}" stroke-width="1.3" stroke-linecap="round"/>'
+    ),
+    # 去水印 —— 水滴 + 斜杠
+    "remove_watermark": (
+        f'<path d="M12 3.8c3.4 4 5.2 6.7 5.2 9.2a5.2 5.2 0 0 1-7.1 4.9" fill="none" '
+        f'stroke="{_STROKE}" stroke-width="1.6" stroke-linecap="round"/>'
+        f'<path d="M4 4.2l16 15.6" stroke="{_DANGER}" stroke-width="1.7" stroke-linecap="round"/>'
+    ),
+    # 合并 —— 两个文档叠放
+    "merge": (
+        f'<path d="M4.6 7.2h6.2l2 2.2h6.6v9.2H4.6z" fill="none" stroke="{_STROKE}" '
+        f'stroke-width="1.5" stroke-linejoin="round"/>'
+        f'<path d="M8 4.2h6l3.2 3.2" fill="none" stroke="{_STROKE}" stroke-width="1.3"/>'
+    ),
+    "check": (
+        f'<path d="M5 12.4l4.2 4.2L19 6.8" fill="none" stroke="{_ACCENT}" '
+        f'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+    ),
+    "check_green": (
+        '<path d="M5 12.4l4.2 4.2L19 6.8" fill="none" stroke="#0f766e" '
+        'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+    ),
+    "warning": (
+        f'<path d="M12 3.8L21 19.6H3z" fill="none" stroke="#b45309" stroke-width="1.5" '
+        f'stroke-linejoin="round"/>'
+        f'<path d="M12 9v4.6M12 16.8v.2" stroke="#b45309" stroke-width="1.8" stroke-linecap="round"/>'
+    ),
 }
 
 _RENDER_SIZE = 96

@@ -4,15 +4,16 @@
 
 # PDF 工具箱
 
-**PDF Invoice Merger Tool**
+**PDF Merge · Watermark · Remove Watermark · Page Manager**
 
-把多份发票 PDF / 图片按「行 × 列」拼版到一页 A4 上，加水印，需要时再抹掉文本层做保密输出。<br>
+把多份发票 PDF / 图片按「行 × 列」拼到一页上，加水印、去掉文本水印、整理页面，
+需要时再抹掉文本层做保密输出。<br>
 macOS 原生桌面应用，Ribbon 界面，全部处理在本机完成，不联网、不上传。
 
 ![macOS 11+](https://img.shields.io/badge/macOS-11%2B-000000?logo=apple&logoColor=white)
 ![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-arm64-2f6f4e)
 ![Python](https://img.shields.io/badge/Python-3.9%2B-3776ab?logo=python&logoColor=white)
-![版本](https://img.shields.io/badge/version-3.0.0-blue)
+![版本](https://img.shields.io/badge/version-3.1.0-blue)
 ![许可证](https://img.shields.io/badge/license-MIT-green)
 
 </div>
@@ -29,9 +30,11 @@ macOS 原生桌面应用，Ribbon 界面，全部处理在本机完成，不联�
 - [功能详解](#功能详解)
   - [1. PDF 合并（N-up 拼版）](#1-pdf-合并n-up-拼版)
   - [2. PDF 水印](#2-pdf-水印)
-  - [3. 保密输出](#3-保密输出)
-  - [4. 图层式文件管理](#4-图层式文件管理)
-  - [5. 打印](#5-打印)
+  - [3. PDF 去水印](#3-pdf-去水印)
+  - [4. 页面管理](#4-页面管理)
+  - [5. 保密输出](#5-保密输出)
+  - [6. 图层式文件管理](#6-图层式文件管理)
+  - [7. 打印](#7-打印)
 - [界面预览](#界面预览)
 - [从源码运行](#从源码运行)
 - [从源码打包](#从源码打包)
@@ -46,27 +49,28 @@ macOS 原生桌面应用，Ribbon 界面，全部处理在本机完成，不联�
 
 ## 这是什么
 
-一个 macOS 桌面小工具，解决一件具体的事：**报销时把一堆发票 PDF 拼到一页纸上打印**。
+一个 macOS 桌面小工具，最初解决的是 **报销时把一堆发票 PDF 拼到一页纸上打印**。
 
 手工做法是把每个 PDF 打开、截图、拖进 Word 排版 —— 十张发票要半小时，还容易串页。
-这个工具把整件事收成「拖进来 → 选 2×2 → 点合并」，输出一份已排版好的 PDF。
+这个工具把整件事收成「拖进来 → 选版面 → 点合并」，输出一份已排版好的 PDF。
 
-除了拼版，还顺手做了三件相邻的事：**加水印**、**保密输出**（把 PDF 变成不可复制的图片版）、
-**打印**。四项能力共用一个「图层」式的文件列表，处理结果自动叠进来，可以接着往下处理。
+现在它是一套本地 PDF 工具箱，除了拼版，还做了五件相邻的事：**加水印**、**去水印**、
+**页面管理**、**保密输出**（把 PDF 变成不可复制的图片版）、**打印**。
+这些能力共用一个「图层」式的文件列表，处理结果自动叠进来，可以接着往下处理。
 
 **适用的内容类型**：发票、报销单、凭证、合同扫描件、票据照片。
 **不适用的**：需要保留可搜索文本层的归档场景（那应该用带 OCR 的方案，而不是本工具）。
 
 ## 下载安装
 
-从 [Releases](https://github.com/liyu253178/pdf-merger-macos/releases/tag/v3.0.0) 页面下载：
+从 [Releases](https://github.com/liyu253178/pdf-merger-macos/releases/tag/v3.1.0) 页面下载：
 
 | | |
 |---|---|
-| **下载** | [`PDF-Toolbox-v3.0.0-macOS-arm64.zip`](https://github.com/liyu253178/pdf-merger-macos/releases/download/v3.0.0/PDF-Toolbox-v3.0.0-macOS-arm64.zip)（42.8 MB，Release 资产） |
+| **下载** | [`PDF-Toolbox-v3.1.0-macOS-arm64.zip`](https://github.com/liyu253178/pdf-merger-macos/releases/download/v3.1.0/PDF-Toolbox-v3.1.0-macOS-arm64.zip)（42.7 MB，Release 资产） |
 | **安装** | 解压，把 `PDF 工具箱.app` 拖进「应用程序」文件夹 |
 | **要求** | macOS 11 Big Sur 或更高，Apple Silicon（M 系列）芯片 |
-| **SHA-256** | `9bac1fb95373e12d6f5ca150eb5bc2382950fb6e688469c569c098a36dbccf6c` |
+| **SHA-256** | `eed3402bfcf48415695787adff40448458976b002b5477df34230fed5781a141` |
 
 > **首次打开被拦下？** 这个包没有 Apple 开发者签名，macOS 会提示「无法验证开发者」。
 > 在「访达」里**右键点击 App → 打开**，再在弹窗里点一次「打开」即可，之后就不再询问。
@@ -74,13 +78,13 @@ macOS 原生桌面应用，Ribbon 界面，全部处理在本机完成，不联�
 >
 > 也可以先核对校验值，确认下载完整：
 > ```bash
-> shasum -a 256 PDF-Toolbox-v3.0.0-macOS-arm64.zip
+> shasum -a 256 PDF-Toolbox-v3.1.0-macOS-arm64.zip
 > ```
 
 ## 三步上手
 
 1. **添加文件** —— 点功能带的「添加 PDF」，可多选 PDF / JPG / PNG。文件按顺序出现在左侧图层栏。
-2. **选版面** —— 「纸张」选 A4 / A3 / Letter，「行数」「列数」决定一张纸放几份（发票常用 2×2）。
+2. **选版面** —— 「纸张」选 A4 / A3 / Letter，「行数」「列数」决定一张纸放几份（默认 **3 行 × 2 列**，每页 6 份）。
 3. **合并并导出** —— 点最右侧「开始合并并导出」，选输出位置。结果会作为新图层出现在列表顶部。
 
 右侧预览区可以随时确认效果：**「效果预览」**看当前参数渲染出来的样子，
@@ -90,7 +94,7 @@ macOS 原生桌面应用，Ribbon 界面，全部处理在本机完成，不联�
 
 ### 1. PDF 合并（N-up 拼版）
 
-把 N 份文档缩放拼到一张纸上，行列可调。核心规则：
+把 N 份文档缩放拼到一张纸上，行列可调，**默认 3 行 × 2 列（每页 6 份）**。核心规则：
 
 - **每个 PDF 逐页展开**，多页文件不会静默丢页 —— 一个 3 页的 PDF 占 3 个格子。
   这一条是刻意避开的坑：参考过的若干同类工具只取第 1 页且不报错。
@@ -106,7 +110,25 @@ macOS 原生桌面应用，Ribbon 界面，全部处理在本机完成，不联�
   界面上会为每个候选字体标注**实测的嵌入体积**（下详）。
 - 预览以**真实文件为底**，所见即所得。
 
-### 3. 保密输出
+### 3. PDF 去水印
+
+- **两种入口**：按关键词查找，或自动检测候选对象。
+- **按关键词**只匹配文字和注释，不会把图纸里的 3D 轴测图、照片、Logo 当成水印；
+  这一条是实际图纸样本踩出来的：水印文字和轴测图在同一页，按“附近的图片”删除会误伤正文。
+- **自动检测**可列出文字、注释和独立图片对象。扫描件里已经烧录进像素的水印不做 OCR / 栅格重绘。
+- **精确到单次文字绘制**：同一个 `BT…ET` 里的页眉、两处斜向水印和尺寸标注可以分别处理，
+  只删命中查询的那几次 `Tj` / `TJ`，正文和标注保留。
+- 检测结果支持整行点击勾选；可以先看“去除后”预览，再另存新文件。原文件始终不变。
+
+### 4. 页面管理
+
+- 单文档编辑：左侧选源 PDF，右侧在**缩略图网格**和**单页视图**之间切换。
+- 删除页面；插入 PDF 页、图片页或空白页；图片页可选纸张与方向。
+- 拖拽排序、旋转、复制、删除，支持 **撤销 / 重做**。
+- 只有导出才会落盘；切换文档、移除文档或关闭窗口时，有未导出的改动会先确认。
+- 编辑过程始终至少保留一页，避免导出空 PDF。
+
+### 5. 保密输出
 
 固定三步：**先加水印 → 把每一页拆成图片 → 按原顺序合回一个新 PDF**。
 
@@ -144,7 +166,7 @@ macOS 原生桌面应用，Ribbon 界面，全部处理在本机完成，不联�
 **单页 PNG 超过 4 MB 就判定为照片型，这一页单独退回 JPEG**，其余页仍保持无损。
 完成提示里会说明有几页发生了回退，不静默改变行为。
 
-### 4. 图层式文件管理
+### 6. 图层式文件管理
 
 参考 GIS 软件的图层面板思路，左侧窄栏把源文件与处理结果统一当图层管理：
 
@@ -154,7 +176,7 @@ macOS 原生桌面应用，Ribbon 界面，全部处理在本机完成，不联�
 - **图层顺序就是合并顺序**。结果置顶意味着它也会参与下一次合并 —— 这正是「拼完再加水印」能串起来的原因；
   不需要时用「移除 / 清空」。
 
-### 5. 打印
+### 7. 打印
 
 顶部工具条右侧的「打印」作用于**当前模块**的预览对象，优先级为
 当前预览对象 → 列表选中项 → 首个 PDF 图层（鼠标悬停即可看到具体是哪个文件）。
@@ -206,11 +228,11 @@ python main.py
 体积是这个项目的硬指标。以下是本机（Apple Silicon / macOS 26 / Python 3.9）的**实测结果**：
 
 ```text
-py2app 打包后      1197.3 MB
-build_thin 瘦身后   117.6 MB    ← 减少 90%
+py2app 打包后       378.1 MB
+build_thin 瘦身后    116.1 MB    ← 减少 69%
   ├ 按白名单裁 PySide6 模块 + 二进制切片
   └ 自检 12 项全过
-发布压缩包           43.4 MB
+发布压缩包            42.7 MB
 ```
 
 ### 第一步：用干净的虚拟环境构建（最关键）
@@ -246,7 +268,7 @@ python3 -m venv .venv-build
 
 `build_thin.py` 做四件事：
 
-1. **清理冗余 Qt 资源与未使用的 PySide6 模块**（体积的大头：`1197 MB → 118 MB`）
+1. **清理冗余 Qt 资源与未使用的 PySide6 模块**（体积的大头：`378 MB → 116 MB`）
 2. **二进制切片**：PySide6 的 macOS wheel 是 universal2，含 x86_64 + arm64 两套机器码。
    只发行 Apple Silicon 时切掉 x86_64，实测每个文件省约 49–52%
    （QtWidgets 17.1→8.7 MB，QtGui 12.7→6.4 MB，QtCore 11.1→5.6 MB）。
@@ -273,8 +295,8 @@ QtCharts / QtLocation / QtGraphs / QtPdf … 连同各自的 QML 模块、metaty
 
 | 是否按白名单删 | 原始体积 | 瘦身后 |
 |---|---|---|
-| 不删（只靠 `setup.py` 的 `excludes`） | 1197 MB | **217 MB** |
-| 删（`KEEP_PYSIDE_MODULES`） | 1197 MB | **118 MB** |
+| 不删（只靠 `setup.py` 的 `excludes`） | 378 MB | **217 MB** |
+| 删（`KEEP_PYSIDE_MODULES`） | 378 MB | **116 MB** |
 
 白名单的内容就是 `src/` 实际 import 的五个模块
 （`QtCore` / `QtGui` / `QtWidgets` / `QtPrintSupport` / `QtSvg`）加上两个 Qt 内部软依赖
@@ -297,11 +319,15 @@ pdf-merger-macos/
 │   │   ├── fonts.py        中文字体探测（真实渲染校验 + 子集化实测）
 │   │   ├── pdf_merger.py   N-up 拼版
 │   │   ├── watermark.py    多行水印
+│   │   ├── watermark_remover.py 去水印：检测 + 单次 Tj/TJ 精确删除
+│   │   ├── page_model.py   页面管理模型：插入 / 排序 / 旋转 / 撤销
 │   │   ├── secure_export.py 保密输出（加水印 → 逐页转图 → 合成）+ 画质档位
 │   │   └── pdf_io.py       统一落盘（字体子集化）与打开（加密拦截）
 │   └── ui/
-│       ├── main_window.py  窗口外壳：模块切换、可滚动的功能带、打印入口
-│       ├── modules.py      两个模块：功能带 + 图层栏 + 预览 + 打印动作
+│       ├── main_window.py  窗口外壳：模块切换、可滚动的功能带、打印/退出
+│       ├── modules.py      合并 / 加水印：功能带 + 图层栏 + 预览
+│       ├── watermark_remove.py 去水印界面：检测列表 / 勾选 / 预览 / 导出
+│       ├── page_module.py  页面管理界面：网格 / 单页 / 插入 / 拖拽 / 导出
 │       ├── print_pdf.py    打印：系统打印对话框 + 逐页光栅化绘制
 │       ├── ribbon.py       Ribbon 控件（按钮最小宽度按文字算）
 │       ├── widgets.py      图层列表、预览画布（缩放/平移/按需渲染倍率）
@@ -317,6 +343,7 @@ pdf-merger-macos/
 │   ├── run_all.sh          一键跑完全部回归
 │   ├── test_e2e.py         端到端功能测试（含异常边界）
 │   ├── test_layers.py      图层 / 预览 / 打印目标交互测试
+│   ├── test_new_modules.py 去水印 / 页面管理 / 关闭退出回归
 │   └── make_shots.py       界面截图（肉眼核对布局）
 └── tools/
     └── make_icon.py        从任意方图生成 macOS 应用图标
@@ -324,7 +351,7 @@ pdf-merger-macos/
 
 ## 测试
 
-一套命令跑完全部回归（**无需真实显示器**，使用 Qt 的 offscreen 平台），当前 **101 项断言 + 12 项自检全部通过**：
+一套命令跑完全部回归（**无需真实显示器**，使用 Qt 的 offscreen 平台），当前 **176 项断言 + 12 项自检全部通过**：
 
 ```bash
 ./tests/run_all.sh        # → ALL TESTS PASSED
@@ -335,13 +362,15 @@ pdf-merger-macos/
 | `main.py --selftest` | 12 项 | 核心链路冒烟：界面装配（含图层列表 / 预览模式 / 打印入口）、字体探测、拼版、图层置顶与保留、水印、**预览清晰度与缩放**、**保密输出四档画质**、打印链路、打印设备枚举、**bundle 本地化声明** |
 | `tests/test_e2e.py` | 46 项 | 四条主链路的端到端断言 + 异常边界：N-up 拼版内容完整；水印多行/角度/字体子集化；**保密输出**的页数·顺序·尺寸保持、文本层/注释/超链接/元信息清除、临时目录清理、**四档画质的格式与体积走向、照片页自动回退 JPEG**、旋转页尺寸不颠倒；损坏文件/缺失文件/加密文件的中文报错；打印链路与页码范围钳制 |
 | `tests/test_layers.py` | 55 项 | 交互行为：结果图层自动置顶且原图层保留、双击切换预览对象、翻页边界、移除后回落、空态按钮禁用、打印目标优先级、**预览缩放与渲染倍率联动**、**窄窗口下功能带不被压扁** |
+| `tests/test_new_modules.py` | 75 项 | 去水印多水印精确删除、关键词模式不误删图片、尺寸标注/3D 图保留；页面插入/排序/旋转/复制/撤销/导出；检测行整行勾选；关闭主窗口后进程退出 |
 
 单独跑某一项：
 
 ```bash
-QT_QPA_PLATFORM=offscreen python tests/test_e2e.py     # 端到端
-QT_QPA_PLATFORM=offscreen python tests/test_layers.py  # 交互
-QT_QPA_PLATFORM=offscreen python main.py --selftest    # 冒烟
+QT_QPA_PLATFORM=offscreen python tests/test_e2e.py         # 端到端
+QT_QPA_PLATFORM=offscreen python tests/test_layers.py      # 交互
+QT_QPA_PLATFORM=offscreen python tests/test_new_modules.py # 去水印 / 页面管理 / 退出
+QT_QPA_PLATFORM=offscreen python main.py --selftest        # 冒烟
 ```
 
 重新生成界面截图（输出到 `$TMPDIR/pdftk-shots`）：
@@ -443,6 +472,18 @@ python tools/make_icon.py <任意方图> --out-dir assets --name pdftoolkit
 这是设计目的。保密输出就是要把文本层抹掉，让内容不可复制、不可检索。
 需要保留文本层就别用这个功能，直接合并即可。
 
+**Q：去水印为什么对扫描件没反应？**
+去水印只处理 PDF 里可分离的文字、注释和独立图片对象。扫描件的水印已经烧进像素，
+和正文黏在一起，本工具不做 OCR，也不做整页栅格重绘，所以不会强行处理。
+
+**Q：按关键词去水印会误删图纸里的 3D 轴测图或照片吗？**
+不会。关键词模式只匹配文字和注释，图片对象会被跳过；自动检测模式下也只会处理
+独立图片对象，不会因为图片靠近文字水印就删除。导出前还可以在“去除后”预览里逐页核对。
+
+**Q：关闭窗口后还会在后台驻留吗？**
+不会。关闭主窗口会显式结束 Qt 事件循环并退出进程；页面管理有未导出的改动时，
+会先弹确认框，取消就不会关闭。
+
 **Q：水印字体显示的不是微软雅黑？**
 macOS 默认不装微软雅黑，它通常随 Microsoft Office 一起安装。
 程序会自动回退到苹方等系统字体，界面上每个候选字体都标了实测嵌入体积。
@@ -461,11 +502,12 @@ macOS 默认不装微软雅黑，它通常随 Microsoft Office 一起安装。
 
 | 项 | 值 |
 |---|---|
-| 版本 | **3.0.0** |
+| 版本 | **3.1.0** |
 | Bundle Identifier | `com.local.pdftoolkit` |
-| 构建产物 | `PDF 工具箱.app`，115.9 MB，arm64 |
-| 发布包 | `PDF-Toolbox-v3.0.0-macOS-arm64.zip`，42.8 MB |
+| 构建产物 | `PDF 工具箱.app`，约 115 MB，arm64 |
+| 发布包 | `PDF-Toolbox-v3.1.0-macOS-arm64.zip`，42.7 MB |
 | 自检项 | 12 项全部通过 |
+| 回归测试 | 176 项断言全部通过 |
 | 依赖 | PySide6-Essentials ≥ 6.6、PyMuPDF ≥ 1.24、py2app ≥ 0.28（仅构建） |
 
 ## 许可证

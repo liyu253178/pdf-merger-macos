@@ -4,7 +4,7 @@
 .venv/
 venv/
 
-# ---- 构建产物（发布用的压缩包放在 release/，不受此处影响）----
+# ---- 构建产物 ----
 build/
 dist/
 old_build_*/
@@ -12,6 +12,9 @@ old_dist_*/
 build.old.*
 dist.old.*
 *.egg-info/
+
+# ---- Release 二进制：只上传 GitHub Releases，不进 Git 历史 ----
+release/
 
 # ---- Python ----
 __pycache__/
